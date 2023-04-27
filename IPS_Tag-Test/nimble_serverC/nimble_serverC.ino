@@ -1,49 +1,17 @@
 #include <NimBLEDevice.h>
 
 // Initialize all pointers
-BLEServer* pServer = NULL;                      // Pointer to the server
-BLECharacteristic* pCharacteristic = NULL;    // Pointer to Characteristic 2
+BLEServer* pServer = NULL;                    // Pointer to the server
+BLECharacteristic* pCharacteristic = NULL;    // Pointer to Characteristic
 
 // Variables to keep track on device connected
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 
-// Variable that will continously be increased and written to the client
-uint32_t value = 0;
-
-// See the following for generating UUIDs:
-// https://www.uuidgenerator.net/
-
 #define SERVICE_UUID        "eb70c0a6-e7fb-469a-bdf7-75c6a559d1ed"
 #define CHARACTERISTIC_UUID "3e805ac6-cdc5-4b0c-84a6-5896a6c835d1"
 
-#define SERVER_A "EC:62:60:9D:86:7A"
-#define SERVER_B "EC:62:60:9C:06:66"
-#define SERVER_C "EC:62:60:9D:7E:96"
-
-#define RSSI_ THRESHOLD -50
-
-struct ReferencePoint {
-    String loc;
-    String macA;  //might not need mac
-    String macB;
-    String macC;
-    int minRssiA;
-    int maxRssiA;
-    int minRssiB;
-    int maxRssiB;
-    int minRssiC;
-    int maxRssiC;
-}   referencePoints[] = {
-    {"MyTable", SERVER_A, SERVER_B, SERVER_C, -73, -52, -79, -78, -74, -65} //Sample format of fingerprint
-    //{},
-    //{},
-    //{},
-    //{}  
-};
-
-const int NUM_POINTS = sizeof(referencePoints) / sizeof(referencePoints[0]);
-
+//------------------------------------ServerCallbacks class--------------------------------------------
 // Callback function that is called whenever a client is connected or disconnected
 class MyServerCallbacks: public BLEServerCallbacks {
         void onConnect(BLEServer* pServer) {
@@ -55,11 +23,66 @@ class MyServerCallbacks: public BLEServerCallbacks {
         }
 };
 
+//------------------------------------CharacteristicCallbacks class-----------------------------------------
+class CharacteristicCallbacks: public NimBLECharacteristicCallbacks {
+        void onRead(NimBLECharacteristic* pCharacteristic) {
+            Serial.print("From client (readCB): ");
+            Serial.println(pCharacteristic->getValue().c_str());
+        };
+
+        void onWrite(NimBLECharacteristic* pCharacteristic) {
+            Serial.print("From client (writeCB): ");
+            Serial.println(pCharacteristic->getValue().c_str());
+        };
+        /** Called before notification or indication is sent,
+            the value can be changed here before sending if desired.
+        */
+        void onNotify(NimBLECharacteristic* pCharacteristic) {
+            Serial.println("Sending notification to clients");
+        };
+
+
+        /** The status returned in status is defined in NimBLECharacteristic.h.
+            The value returned in code is the NimBLE host return code.
+        */
+        void onStatus(NimBLECharacteristic* pCharacteristic, Status status, int code) {
+            String str = ("Notification/Indication status code: ");
+            str += status;
+            str += ", return code: ";
+            str += code;
+            str += ", ";
+            str += NimBLEUtils::returnCodeToString(code);
+            Serial.println(str);
+        };
+
+        void onSubscribe(NimBLECharacteristic* pCharacteristic, ble_gap_conn_desc* desc, uint16_t subValue) {
+            String str = "Client ID: ";
+            str += desc->conn_handle;
+            str += " Address: ";
+            str += std::string(NimBLEAddress(desc->peer_ota_addr)).c_str();
+            if (subValue == 0) {
+                str += " Unsubscribed to ";
+            } else if (subValue == 1) {
+                str += " Subscribed to notfications for ";
+            } else if (subValue == 2) {
+                str += " Subscribed to indications for ";
+            } else if (subValue == 3) {
+                str += " Subscribed to notifications and indications for ";
+            }
+            str += std::string(pCharacteristic->getUUID()).c_str();
+
+            Serial.println(str);
+        };
+};
+
+static CharacteristicCallbacks chrCallbacks;
+
+//------------------------------------setup----------------------------------------------------------
 void setup() {
     Serial.begin(115200);
 
     // Create the BLE Device
-    BLEDevice::init("SrvrC"); // Up to 5 chars only
+    BLEDevice::init("Server_C"); // Up to 5 chars only UPDATE: nimBLE fixed the char limit
 
     // Create the BLE Server
     pServer = BLEDevice::createServer();
@@ -75,6 +98,8 @@ void setup() {
                           NIMBLE_PROPERTY::WRITE   |
                           NIMBLE_PROPERTY::NOTIFY
                       );
+    pCharacteristic->setValue("Waiting for command...");
+    pCharacteristic->setCallbacks(&chrCallbacks);
 
     // Start the service
     pService->start();
@@ -87,54 +112,19 @@ void setup() {
     BLEDevice::startAdvertising();
     Serial.println("Waiting a client connection to notify...");
 }
-
+//------------------------------------loop------------------------------------------------------------
 void loop() {
+    // notify changed value
     if (deviceConnected) {
-        // Always advertise for reconnecting
         pServer->startAdvertising();
 
-        // Read Characteristic value of Server
-        std::string rxValue = pCharacteristic->getValue(); //Get RSSI from A, B, and C
-        String str_a, str_b, str_c;
-        int rx_a, rx_b, rx_c;
-        String rx_new = String(rxValue.c_str());
-        
-        // Separate csv
-        int commaIndex = rx_new.indexOf(',');
-        int secondCommaIndex = rx_new.indexOf(',', commaIndex+1);
-        str_a = rx_new.substring(0, commaIndex);
-        str_b = rx_new.substring(commaIndex + 1, secondCommaIndex);
-        str_c = rx_new.substring(secondCommaIndex);
-        
-        // Convert to int
-        rx_a = atoi(str_a.c_str());
-        rx_b = atoi(str_b.c_str());
-        rx_c = atoi(str_c.c_str());
-        
-        //compare to database here-------------------------------------------------------------
-        int maxRssi = -100;
-        int maxIndex = -1;
-        for (int i = 0; i < NUM_POINTS; i++){
-            if(rx_a >= referencePoints[i].minRssiA && rx_a <= referencePoints[i].maxRssiA && rx_a > maxRssi){
-                Serial.print("From Server A: ");
-                Serial.println(referencePoints[i].loc);
-            }
-            if (rx_b >= referencePoints[i].minRssiB && rx_b <= referencePoints[i].maxRssiB && rx_b > maxRssi){
-                Serial.print("From Server B: ");
-                Serial.println(referencePoints[i].loc);
-            }
-            if (rx_c >= referencePoints[i].minRssiC && rx_c <= referencePoints[i].maxRssiC && rx_c > maxRssi){
-                Serial.print("From Server C: ");
-                Serial.println(referencePoints[i].loc);
-            }
-            else {
-                Serial.println("Unknown location");
-            }
-        }
-        //-------------------------------------------------------------------------------------
+        std::string rxValue = pCharacteristic->getValue();
+        pCharacteristic->notify(true);
+
         //Serial.print("From client: ");
         //Serial.println(rxValue.c_str());
 
+        //delay, can use millis() for production
         delay(1000);
     }
     // The code below keeps the connection status up-to-date:

@@ -1,18 +1,17 @@
 #include <NimBLEDevice.h>
 
 // Initialize all pointers
-BLEServer* pServer = NULL;                      // Pointer to the server
-BLECharacteristic* pCharacteristic = NULL;    // Pointer to Characteristic 2
+BLEServer* pServer = NULL;                    // Pointer to the server
+BLECharacteristic* pCharacteristic = NULL;    // Pointer to Characteristic 
 
 // Variables to keep track on device connected
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 
-std::string old_message;
-
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "4943d35e-09a0-4d49-85a7-2195596285eb"
 
+//------------------------------------ServerCallbacks class--------------------------------------------
 // Callback function that is called whenever a client is connected or disconnected
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -24,11 +23,66 @@ class MyServerCallbacks: public BLEServerCallbacks {
     }
 };
 
+//------------------------------------CharacteristicCallbacks class-----------------------------------------
+class CharacteristicCallbacks: public NimBLECharacteristicCallbacks {
+    void onRead(NimBLECharacteristic* pCharacteristic){
+        Serial.print("From client (readCB): ");
+        Serial.println(pCharacteristic->getValue().c_str());
+    };
+
+    void onWrite(NimBLECharacteristic* pCharacteristic) {
+        Serial.print("From client (writeCB): ");
+        Serial.println(pCharacteristic->getValue().c_str());
+    };
+    /** Called before notification or indication is sent,
+     *  the value can be changed here before sending if desired.
+     */
+    void onNotify(NimBLECharacteristic* pCharacteristic) {
+        Serial.println("Sending notification to clients");
+    };
+
+
+    /** The status returned in status is defined in NimBLECharacteristic.h.
+     *  The value returned in code is the NimBLE host return code.
+     */
+    void onStatus(NimBLECharacteristic* pCharacteristic, Status status, int code) {
+        String str = ("Notification/Indication status code: ");
+        str += status;
+        str += ", return code: ";
+        str += code;
+        str += ", ";
+        str += NimBLEUtils::returnCodeToString(code);
+        Serial.println(str);
+    };
+
+    void onSubscribe(NimBLECharacteristic* pCharacteristic, ble_gap_conn_desc* desc, uint16_t subValue) {
+        String str = "Client ID: ";
+        str += desc->conn_handle;
+        str += " Address: ";
+        str += std::string(NimBLEAddress(desc->peer_ota_addr)).c_str();
+        if(subValue == 0) {
+            str += " Unsubscribed to ";
+        }else if(subValue == 1) {
+            str += " Subscribed to notfications for ";
+        } else if(subValue == 2) {
+            str += " Subscribed to indications for ";
+        } else if(subValue == 3) {
+            str += " Subscribed to notifications and indications for ";
+        }
+        str += std::string(pCharacteristic->getUUID()).c_str();
+
+        Serial.println(str);
+    };
+};
+
+static CharacteristicCallbacks chrCallbacks;
+
+//------------------------------------setup----------------------------------------------------------
 void setup() {
   Serial.begin(115200);
 
   // Create the BLE Device
-  BLEDevice::init("SrvrA"); // Up to 5 chars only
+  BLEDevice::init("Server_A"); // Up to 5 chars only UPDATE: nimBLE fixed the char limit
 
   // Create the BLE Server
   pServer = BLEDevice::createServer();
@@ -44,7 +98,8 @@ void setup() {
                       NIMBLE_PROPERTY::WRITE   |
                       NIMBLE_PROPERTY::NOTIFY
                     ); 
-  pCharacteristic->setValue("Char value here.");
+  pCharacteristic->setValue("Waiting for command...");
+  pCharacteristic->setCallbacks(&chrCallbacks);
 
   // Start the service
   pService->start();
@@ -57,25 +112,19 @@ void setup() {
   BLEDevice::startAdvertising();
   Serial.println("Waiting a client connection to notify...");
 }
-
+//------------------------------------loop------------------------------------------------------------
 void loop() {
     // notify changed value
     if (deviceConnected) {
       pServer->startAdvertising();
-
-      std::string rxValue = pCharacteristic->getValue();
-
-      if (rxValue != old_message){
-          old_message = rxValue;
-          pCharacteristic->notify(true);
-      }
       
-      Serial.print("From client: ");
-      Serial.println(rxValue.c_str());
+      std::string rxValue = pCharacteristic->getValue();
+      pCharacteristic->notify(true);
       
       //delay, can use millis() for production
       delay(1000);
     }
+    
     // The code below keeps the connection status up-to-date:
     // Disconnecting
     if (!deviceConnected && oldDeviceConnected) {

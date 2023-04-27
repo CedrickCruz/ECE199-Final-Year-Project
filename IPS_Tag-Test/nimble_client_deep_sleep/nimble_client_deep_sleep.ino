@@ -34,6 +34,7 @@ static boolean doScanC = false;
 static BLEAdvertisedDevice* myDeviceA;
 static BLEAdvertisedDevice* myDeviceB;
 static BLEAdvertisedDevice* myDeviceC;
+
 BLERemoteCharacteristic* pRemoteCharacteristicA;
 BLERemoteCharacteristic* pRemoteCharacteristicB;
 BLERemoteCharacteristic* pRemoteCharacteristicC;
@@ -86,115 +87,6 @@ class MyClientCallbackC : public BLEClientCallbacks {
             Serial.println("onDisconnect C");
         }
 };
-//-------------------------------------connectToServer function----------------------------------------------
-// Function that is run whenever a server is connected
-bool connectToServerA(BLEUUID serviceUUID, BLEUUID charUUID) {
-    Serial.print("Forming a connection to ");
-    Serial.println(myDeviceA->getAddress().toString().c_str());
-    Serial.println(" - Created client for A");
-
-    pClientA->setClientCallbacks(new MyClientCallbackA());
-    //delay(1000); // test to avoid packet mismatch------------------------------------------------------
-
-    // Connect to the BLE Server.
-    pClientA->connect(myDeviceA);  // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
-    Serial.println(" - Connected to server A");
-
-    // Obtain a reference to the service we are after in the remote BLE server.
-    BLERemoteService* pRemoteServiceA = pClientA->getService(serviceUUID);
-    if (pRemoteServiceA == nullptr) {
-        Serial.print(" - Failed to find service ");
-        Serial.println(serviceUUID.toString().c_str());
-        pClientA->disconnect();
-        return false;
-    }
-    Serial.println(" - Found service of server A");
-    
-    pRemoteCharacteristicA = pRemoteServiceA->getCharacteristic(charUUID);
-    if (pRemoteCharacteristicA == nullptr) {
-        Serial.print("Failed to find our characteristic UUID: ");
-        Serial.println(charUUID.toString().c_str());
-        pClientA->disconnect();
-        return false;
-    }
-
-    Serial.println(" - Found our characteristic A");
-    connectedA = true;
-    return true;
-}
-
-// Function that is run whenever the server B is connected
-bool connectToServerB(BLEUUID serviceUUID, BLEUUID charUUID) {
-    Serial.print("Forming a connection to ");
-    Serial.println(myDeviceB->getAddress().toString().c_str());
-    Serial.println(" - Created client for B");
-
-    pClientB->setClientCallbacks(new MyClientCallbackB());
-    //delay(1000); // test to avoid packet mismatch------------------------------------------------------
-
-    // Connect to the BLE Server.
-    pClientB->connect(myDeviceB);  // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
-    Serial.println(" - Connected to server B");
-
-    // Obtain a reference to the service we are after in the remote BLE server.
-    BLERemoteService* pRemoteServiceB = pClientB->getService(serviceUUID);
-    if (pRemoteServiceB == nullptr) {
-        Serial.print(" - Failed to find service ");
-        Serial.println(serviceUUID.toString().c_str());
-        pClientB->disconnect();
-        return false;
-    }
-    Serial.println(" - Found service of server B");
-    
-    pRemoteCharacteristicB = pRemoteServiceB->getCharacteristic(charUUID);
-    if (pRemoteCharacteristicB == nullptr) {
-        Serial.print("Failed to find our characteristic UUID: ");
-        Serial.println(charUUID.toString().c_str());
-        pClientB->disconnect();
-        return false;
-    }
-
-    Serial.println(" - Found our characteristic B");
-    connectedB = true;
-    return true;
-}
-
-// Function that is run whenever the server C is connected
-bool connectToServerC(BLEUUID serviceUUID, BLEUUID charUUID) {
-    Serial.print("Forming a connection to ");
-    Serial.println(myDeviceC->getAddress().toString().c_str());
-    Serial.println(" - Created client for C");
-
-    pClientC->setClientCallbacks(new MyClientCallbackC());
-    //delay(1000); // test to avoid packet mismatch------------------------------------------------------
-
-    // Connect to the BLE Server.
-    pClientC->connect(myDeviceC);  // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
-    Serial.println(" - Connected to server C");
-
-    // Obtain a reference to the service we are after in the remote BLE server.
-    BLERemoteService* pRemoteServiceC = pClientC->getService(serviceUUID);
-    if (pRemoteServiceC == nullptr) {
-        Serial.print(" - Failed to find service ");
-        Serial.println(serviceUUID.toString().c_str());
-        pClientC->disconnect();
-        return false;
-    }
-    Serial.println(" - Found service of server C");
-    
-    pRemoteCharacteristicC = pRemoteServiceC->getCharacteristic(charUUID);
-    if (pRemoteCharacteristicC == nullptr) {
-        Serial.print("Failed to find our characteristic UUID: ");
-        Serial.println(charUUID.toString().c_str());
-        pClientC->disconnect();
-        return false;
-    }
-
-    Serial.println(" - Found our characteristic C");
-    connectedC = true;
-    return true;
-}
-
 //-------------------------------------AdvertisedDeviceCallback class----------------------------------------------
 // Scan for BLE servers and find the first one that advertises the service we are looking for.
 class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
@@ -230,6 +122,120 @@ void notifyCB(BLERemoteCharacteristic* pRemoteChar, uint8_t* pData, size_t lengt
     }
     Serial.println();
 }
+static MyClientCallbackA clientCBA;
+static MyClientCallbackB clientCBB;
+static MyClientCallbackC clientCBC;
+//-------------------------------------connectToServer function----------------------------------------------
+// Function that is run whenever a server is connected
+bool connectToServerA(BLEUUID serviceUUID, BLEUUID charUUID) {
+    Serial.print("Forming a connection to ");
+    Serial.println(myDeviceA->getAddress().toString().c_str());
+    Serial.println(" - Created client for A");
+
+    //pClientA->setClientCallbacks(new MyClientCallbackA());
+    pClientA->setClientCallbacks(&clientCBA, false);
+    //delay(1000); // test to avoid packet mismatch------------------------------------------------------
+
+    // Connect to the BLE Server.
+    pClientA->connect(myDeviceA);  // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
+    Serial.println(" - Connected to server A");
+
+    // Obtain a reference to the service we are after in the remote BLE server.
+    BLERemoteService* pRemoteServiceA = pClientA->getService(serviceUUID);
+    if (pRemoteServiceA == nullptr) {
+        Serial.print(" - Failed to find service ");
+        Serial.println(serviceUUID.toString().c_str());
+        pClientA->disconnect();
+        return false;
+    }
+    Serial.println(" - Found service of server A");
+    
+    pRemoteCharacteristicA = pRemoteServiceA->getCharacteristic(charUUID);
+    if (pRemoteCharacteristicA == nullptr) {
+        Serial.print("Failed to find our characteristic UUID: ");
+        Serial.println(charUUID.toString().c_str());
+        pClientA->disconnect();
+        return false;
+    }
+
+    Serial.println(" - Found our characteristic A");
+    connectedA = true;
+    return true;
+}
+
+// Function that is run whenever the server B is connected
+bool connectToServerB(BLEUUID serviceUUID, BLEUUID charUUID) {
+    Serial.print("Forming a connection to ");
+    Serial.println(myDeviceB->getAddress().toString().c_str());
+    Serial.println(" - Created client for B");
+
+    //pClientB->setClientCallbacks(new MyClientCallbackB());
+    pClientB->setClientCallbacks(&clientCBB, false);
+    //delay(1000); // test to avoid packet mismatch------------------------------------------------------
+
+    // Connect to the BLE Server.
+    pClientB->connect(myDeviceB);  // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
+    Serial.println(" - Connected to server B");
+
+    // Obtain a reference to the service we are after in the remote BLE server.
+    BLERemoteService* pRemoteServiceB = pClientB->getService(serviceUUID);
+    if (pRemoteServiceB == nullptr) {
+        Serial.print(" - Failed to find service ");
+        Serial.println(serviceUUID.toString().c_str());
+        pClientB->disconnect();
+        return false;
+    }
+    Serial.println(" - Found service of server B");
+    
+    pRemoteCharacteristicB = pRemoteServiceB->getCharacteristic(charUUID);
+    if (pRemoteCharacteristicB == nullptr) {
+        Serial.print("Failed to find our characteristic UUID: ");
+        Serial.println(charUUID.toString().c_str());
+        pClientB->disconnect();
+        return false;
+    }
+
+    Serial.println(" - Found our characteristic B");
+    connectedB = true;
+    return true;
+}
+
+// Function that is run whenever the server C is connected
+bool connectToServerC(BLEUUID serviceUUID, BLEUUID charUUID) {
+    Serial.print("Forming a connection to ");
+    Serial.println(myDeviceC->getAddress().toString().c_str());
+    Serial.println(" - Created client for C");
+
+    //pClientC->setClientCallbacks(new MyClientCallbackC());
+    pClientC->setClientCallbacks(&clientCBC, false);
+    //delay(1000); // test to avoid packet mismatch------------------------------------------------------
+
+    // Connect to the BLE Server.
+    pClientC->connect(myDeviceC);  // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
+    Serial.println(" - Connected to server C");
+
+    // Obtain a reference to the service we are after in the remote BLE server.
+    BLERemoteService* pRemoteServiceC = pClientC->getService(serviceUUID);
+    if (pRemoteServiceC == nullptr) {
+        Serial.print(" - Failed to find service ");
+        Serial.println(serviceUUID.toString().c_str());
+        pClientC->disconnect();
+        return false;
+    }
+    Serial.println(" - Found service of server C");
+    
+    pRemoteCharacteristicC = pRemoteServiceC->getCharacteristic(charUUID);
+    if (pRemoteCharacteristicC == nullptr) {
+        Serial.print("Failed to find our characteristic UUID: ");
+        Serial.println(charUUID.toString().c_str());
+        pClientC->disconnect();
+        return false;
+    }
+
+    Serial.println(" - Found our characteristic C");
+    connectedC = true;
+    return true;
+}
 //-------------------------------------deep sleep function--------------------------------------
 void deep_sleep(){
     pClientA->disconnect();
@@ -245,7 +251,7 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
 
-    // Set CPU frequency to 80 MHz
+    // Set CPU frequency to 80 MHz NOTE: need to check for confirmation
     esp_pm_config_esp32_t pm_config;
     pm_config.max_freq_mhz = 80;
     esp_pm_configure(&pm_config);
@@ -274,7 +280,7 @@ void loop() {
     // TODO: Need a way to interrupt deep sleep when received a message
     //       Can set 10 as variable for easy changing and readability
     
-    sleep_count++;
+    //sleep_count++;
     if (sleep_count == 10){
         sleep_count = 0;
         deep_sleep();
@@ -352,10 +358,13 @@ void loop() {
             ledcWriteNote(PWM_CHANNEL, NOTE_C, 4);                                 // Configure note to play
             delay(1000);                                                           // Play for 1 sec
             ledcDetachPin(BUZZER_PIN);                                             // Detach pin to stop playing
-            String txValue = "Ring done!";
-            pRemoteCharacteristicA->writeValue(txValue.c_str(), txValue.length()); // Send to prompt to Server when done ringing
+            pRemoteCharacteristicA->writeValue("Ring done!");                      // Send to prompt to Server when done ringing
             // Enter deep sleep after command
             //deep_sleep();
+        }
+        // Read data "3" resets tag connection status after disconnecting
+        else if (rx_int == 3){
+            pRemoteCharacteristicA->writeValue("Waiting for command...");
         }
     }
     if (connectedB) {
@@ -396,10 +405,13 @@ void loop() {
             ledcWriteNote(PWM_CHANNEL, NOTE_C, 4);                                 // Configure note to play
             delay(1000);                                                           // Play for 1 sec
             ledcDetachPin(BUZZER_PIN);                                             // Detach pin to stop playing
-            String txValue = "Ring done!";
-            pRemoteCharacteristicB->writeValue(txValue.c_str(), txValue.length()); // Send to prompt to Server when done ringing
+            pRemoteCharacteristicB->writeValue("Ring done!");                      // Send to prompt to Server when done ringing
             // Enter deep sleep after command
             //deep_sleep();
+        }
+        // Read data "3" resets tag connection status after disconnecting
+        else if (rx_int == 3){
+            pRemoteCharacteristicB->writeValue("Waiting for command...");
         }
     }
     if (connectedC) {
@@ -440,10 +452,13 @@ void loop() {
             ledcWriteNote(PWM_CHANNEL, NOTE_C, 4);                                 // Configure note to play
             delay(1000);                                                           // Play for 1 sec
             ledcDetachPin(BUZZER_PIN);                                             // Detach pin to stop playing
-            String txValue = "Ring done!";
-            pRemoteCharacteristicC->writeValue(txValue.c_str(), txValue.length()); // Send to prompt to Server when done ringing
+            pRemoteCharacteristicC->writeValue("Ring done!");                      // Send to prompt to Server when done ringing
             // Enter deep sleep after command
             //deep_sleep();
+        }
+        // Read data "3" resets tag connection status after disconnecting
+        else if (rx_int == 3){
+            pRemoteCharacteristicC->writeValue("Waiting for command...");
         }
     }
     if (!doScanA || !doScanB || !doScanC){
