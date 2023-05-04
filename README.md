@@ -4,3 +4,5 @@ Final year project for ECE 199: Indoor Positioning System Lost Item Tracker usin
 List of codes used in developing the project.
 
 Tested with Arduino-BLE and nimBLE library.
+
+IPS Tag Test contains test codes during development.
