@@ -6,7 +6,7 @@
 #include <esp_pm.h>
 
 #define SLEEP_TIME_SECONDS 5
-#define RSSI_LIMIT -100
+#define RSSI_THRESHOLD -100
 #define IDLE_TIME_SECONDS 10
 
 // Define UUIDs:
@@ -252,18 +252,18 @@ int rssi_average_A[10];
 int rssi_average_B[10];
 int rssi_average_C[10];
 void collectRSSI(){
-    for (int i = 0; i < 10; i++){
+    for (int i = 0; i < 100; i++){
         // Collect 10 rssi measurements
         rssiA = pClientA->getRssi();
-        while(rssiA < RSSI_LIMIT) rssiA = pClientA->getRssi(); // This line ensures valid rssi reading
+        while(rssiA <= RSSI_THRESHOLD) rssiA = pClientA->getRssi(); // This line ensures valid rssi reading
         rssi_average_A[i] = rssiA;
         
         rssiB = pClientB->getRssi();
-        while(rssiB < RSSI_LIMIT) rssiB = pClientB->getRssi();
+        while(rssiB <= RSSI_THRESHOLD) rssiB = pClientB->getRssi();
         rssi_average_B[i] = rssiB;
         
         rssiC = pClientC->getRssi();
-        while(rssiC < RSSI_LIMIT) rssiC = pClientC->getRssi();
+        while(rssiC <= RSSI_THRESHOLD) rssiC = pClientC->getRssi();
         rssi_average_C[i] = rssiC;
     }
 }
@@ -404,15 +404,15 @@ void loop() {
             //averageRSSI();
             
             //str_rssi = String(average_a/10);  // Convert int to String
-            str_rssi = String(modeRSSI(rssi_average_A));
+            str_rssi = String(modeRSSI(rssi_average_A)); // Get mode of RSSI and convert to String
             rssi_to_server += str_rssi;       // Construct rssi csv
             
             //str_rssi = String(average_b/10);  // Convert int to String
-            str_rssi = String(modeRSSI(rssi_average_B));
+            str_rssi = String(modeRSSI(rssi_average_B)); // Get mode of RSSI and convert to String
             rssi_to_server += "," + str_rssi; // Construct rssi csv
             
             //str_rssi = String(average_c/10);  // Convert int to String
-            str_rssi = String(modeRSSI(rssi_average_C));
+            str_rssi = String(modeRSSI(rssi_average_C)); // Get mode of RSSI and convert to String
             rssi_to_server += "," + str_rssi; // Construct rssi csv
             
             pRemoteCharacteristicA->writeValue(rssi_to_server.c_str(), rssi_to_server.length()); // Send rssi data to Server A

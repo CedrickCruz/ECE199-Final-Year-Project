@@ -10,28 +10,28 @@ bool oldDeviceConnected = false;
 
 #define SERVICE_UUID        "07ec0337-0f0b-4ae7-8e85-ddc8281993f0"
 #define CHARACTERISTIC_UUID "a5288c1e-1b31-4a8c-b7bd-d021d9cbdd32"
+
 //-----------------------------------RSSI Databases----------------------------------------------------------
 const int NUM_BEACONS = 3;
-const int NUM_LOCATIONS = 6;
+const int NUM_LOCATIONS = 5;
 const String LOCATION_NAMES[NUM_LOCATIONS] = {
     "Area A",
     "Area B",
     "Area C",
     "Area D",
-    "Area E",
-    "Area F"
+    "Area E"
+    //"Area F"
 };
 const int RSSI_DB[NUM_LOCATIONS][NUM_BEACONS] = {
-    {-63, -91, -95},
-    {-71, -87, -80},
-    {-86, -84, -76},
-    {-81, -68, -78},
-    {-90, -85, -68},
-    {-80, -86, -71}
+    { -58, -70, -81},
+    { -67, -77, -84},
+    { -75, -61, -77},
+    { -79, -73, -79},
+    { -87, -81, -68}
+    //{ -80, -82, -76}
 };
-int distanceA = 0;
-int distanceB = 0;
-int distanceC = 0;
+
+String estimatedLocation = "Unknown";
 //------------------------------------ServerCallbacks class--------------------------------------------
 // Callback function that is called whenever a client is connected or disconnected
 class MyServerCallbacks: public BLEServerCallbacks {
@@ -59,7 +59,7 @@ class CharacteristicCallbacks: public NimBLECharacteristicCallbacks {
             the value can be changed here before sending if desired.
         */
         void onNotify(NimBLECharacteristic* pCharacteristic) {
-            Serial.println("Sending notification to clients");
+            //Serial.println("Sending notification to clients");
         };
 
         /** The status returned in status is defined in NimBLECharacteristic.h.
@@ -72,7 +72,7 @@ class CharacteristicCallbacks: public NimBLECharacteristicCallbacks {
             str += code;
             str += ", ";
             str += NimBLEUtils::returnCodeToString(code);
-            Serial.println(str);
+            //Serial.println(str);
         };
 
         void onSubscribe(NimBLECharacteristic* pCharacteristic, ble_gap_conn_desc* desc, uint16_t subValue) {
@@ -96,13 +96,78 @@ class CharacteristicCallbacks: public NimBLECharacteristicCallbacks {
 };
 
 static CharacteristicCallbacks chrCallbacks;
+//------------------------------------getAverage function----------------------------------------------
+int RSSI_AVERAGE[NUM_LOCATIONS] = {0, 0, 0, 0, 0};
+int* difference_ptr;
+void getAverage(int listA[], int listB[], int listC[]) {
+    memset(RSSI_AVERAGE, 0, sizeof(RSSI_AVERAGE));
+    for (int i = 0; i < NUM_LOCATIONS; i++) {
+        RSSI_AVERAGE[i] = (listA[i] + listB[i] + listC[i]) / 3;
+        Serial.println(RSSI_AVERAGE[i]);
+    }
+}
+//------------------------------------print_locationDiff function--------------------------------------
+void print_locationDiff(int list_diff_A[], int list_diff_B[], int list_diff_C[]){
+    for (int i = 0; i < NUM_LOCATIONS; i++) {
+        Serial.println("---------");          // debugging purposes only
+        Serial.print("A: ");
+        Serial.println(list_diff_A[i]);
+        Serial.print("B: ");
+        Serial.println(list_diff_B[i]);
+        Serial.print("C: ");
+        Serial.println(list_diff_C[i]);
+    }
+}
+//------------------------------------estimate_location function---------------------------------------
+String estimate_location(int rssi_average[], const String location_names[]) {
+    int minDistance = INT_MAX;
+    String location = "Unknown";
+    for (int i = 0; i < NUM_LOCATIONS; i++){
+        if (rssi_average[i] < minDistance){   // Determine area/s with shortest distance to tag
+            minDistance = rssi_average[i];
+            location = location_names[i];
+        }
+        if (rssi_average[i] == minDistance){
+            //location += location_names[i];
+        }
+    }
+    return location;
+}
+//------------------------------------getLocation function---------------------------------------------
+void getLocation(int rssi_a, int rssi_b, int rssi_c) {
+    int LOCATION_DIFF_A[NUM_LOCATIONS] = {0, 0, 0, 0, 0};
+    int LOCATION_DIFF_B[NUM_LOCATIONS] = {0, 0, 0, 0, 0};
+    int LOCATION_DIFF_C[NUM_LOCATIONS] = {0, 0, 0, 0, 0};
+    for (int i = 0; i < NUM_LOCATIONS; i++) {
+        int distanceA = 0;
+        int distanceB = 0;
+        int distanceC = 0;
+        distanceA += abs(rssi_a - RSSI_DB[i][0]);   // Gets absolute difference between current and database RSSI
+        distanceB += abs(rssi_b - RSSI_DB[i][1]);   // Lower value means shorter distance
+        distanceC += abs(rssi_c - RSSI_DB[i][2]);
 
+        LOCATION_DIFF_A[i] += distanceA;            // Add distance to array for computing average
+        LOCATION_DIFF_B[i] += distanceB;
+        LOCATION_DIFF_C[i] += distanceC;
+    }
+    print_locationDiff(LOCATION_DIFF_A, LOCATION_DIFF_B, LOCATION_DIFF_C);
+    getAverage(LOCATION_DIFF_A, LOCATION_DIFF_B, LOCATION_DIFF_C);
+    estimatedLocation = estimate_location(RSSI_AVERAGE, LOCATION_NAMES);  // Constructs message for the mobile app
+    //estimatedLocation = estimatedLocation + "\nA" + RSSI_AVERAGE[0];
+    //estimatedLocation = estimatedLocation + "B" + RSSI_AVERAGE[1];
+    //estimatedLocation = estimatedLocation + "C" + RSSI_AVERAGE[2];
+    //estimatedLocation = estimatedLocation + "D" + RSSI_AVERAGE[3];
+    //estimatedLocation = estimatedLocation + "E" + RSSI_AVERAGE[4];
+    
+    pCharacteristic->setValue(estimatedLocation); // Sets characteristic value to be read by mobile app
+}
 //------------------------------------setup----------------------------------------------------------
 void setup() {
     Serial.begin(115200);
 
     // Create the BLE Device
     BLEDevice::init("Server_B");
+    BLEDevice::setMTU(40); // Increase MTU size (default: 20) NOTE: Not working
 
     // Create the BLE Server
     pServer = BLEDevice::createServer();
@@ -158,71 +223,13 @@ void loop() {
         rx_b = atoi(str_b.c_str());
         rx_c = atoi(str_c.c_str());
 
-        int rssiValues[NUM_BEACONS] = {rx_a, rx_b, rx_c};
-
-        //compare to database here---------------------------------------------------------------------
-        //determines distance by difference of rssi values from scan and db
-        //the lesser the distance value means the closer the tag to that reference point
-        String estimatedLocationA = "Unknown";
-        String estimatedLocationB = "Unknown";
-        String estimatedLocationC = "Unknown";
-        int minDistanceA = INT_MAX;
-        int minDistanceB = INT_MAX;
-        int minDistanceC = INT_MAX;
-        for (int i = 0; i < NUM_LOCATIONS; i++) {
-            distanceA += abs(rssiValues[0] - RSSI_DB[i][0]);
-            distanceB += abs(rssiValues[1] - RSSI_DB[i][1]);
-            distanceC += abs(rssiValues[2] - RSSI_DB[i][2]);
-
-            if (distanceA < minDistanceA){
-                minDistanceA = distanceA;
-                estimatedLocationA = LOCATION_NAMES[i];
-            }
-            if (distanceB < minDistanceB){
-                minDistanceB = distanceB;
-                estimatedLocationB = LOCATION_NAMES[i];
-            }
-            if (distanceC < minDistanceC){
-                minDistanceC = distanceC;
-                estimatedLocationC = LOCATION_NAMES[i];
-            }
-
-            /*
-            for (int j = 0; j < NUM_BEACONS; j++) {
-                distance += abs(rssiValues[j] - RSSI_DB[i][j]); //determine value of rssi values compared to rssi db
-            }
-
-            if (distance < minDistance) { //set location as estimated location when distance is less
-                minDistance = distance;
-                estimatedLocation = LOCATION_NAMES[i];
-            }
-            */
+        // Call getLocation when rx_a value is valid (RSSI values are always < 0)
+        if (rx_a < 0) {
+            getLocation(rx_a, rx_b, rx_c);
         }
-
-        Serial.print("Estimated location (from A): ");
-        Serial.println(estimatedLocationA);
-        Serial.print("Estimated location (from B): ");
-        Serial.println(estimatedLocationB);
-        Serial.print("Estimated location (from C): ");
-        Serial.println(estimatedLocationC);
-
-        String estimatedLocation;
-        if(estimatedLocationA == estimatedLocationB){
-            estimatedLocation = estimatedLocationA;
-        }
-        if(estimatedLocationB == estimatedLocationC){
-            estimatedLocation = estimatedLocationB;
-        }
-        if(estimatedLocationA == estimatedLocationC){
-            estimatedLocation = estimatedLocationC;
-        }
-        //estimatedLocation = "Estimated location (from A): " + estimatedLocationA + "\nEstimated location (from B): " + estimatedLocationB + "\nEstimated location (from C): " + estimatedLocationC;
-        if(rx_a != 0){
-            pCharacteristic->setValue(estimatedLocation);
-        }
-        
-        delay(1000);
     }
+    delay(1000);
+    
     // The code below keeps the connection status up-to-date:
     // Disconnecting
     if (!deviceConnected && oldDeviceConnected) {
@@ -230,6 +237,8 @@ void loop() {
         pServer->startAdvertising(); // restart advertising
         Serial.println("start advertising");
         oldDeviceConnected = deviceConnected;
+        pCharacteristic->setValue("3");
+        pCharacteristic->notify(true);
     }
     // Connecting
     if (deviceConnected && !oldDeviceConnected) {
