@@ -252,7 +252,7 @@ int rssi_average_A[10];
 int rssi_average_B[10];
 int rssi_average_C[10];
 void collectRSSI(){
-    for (int i = 0; i < 100; i++){
+    for (int i = 0; i < 10; i++){
         // Collect 10 rssi measurements
         rssiA = pClientA->getRssi();
         while(rssiA <= RSSI_THRESHOLD) rssiA = pClientA->getRssi(); // This line ensures valid rssi reading
