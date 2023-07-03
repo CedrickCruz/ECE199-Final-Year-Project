@@ -8,3 +8,5 @@ IPS Tag Test folder contains test codes during development.
 Final Code (22 June 2023) for Final Manuscript.
 
 Backup Code (May 2023) first working prototype code.
+
+Mobile Application apk named mo_ble_map_new.apk
